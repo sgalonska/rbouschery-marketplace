@@ -3,7 +3,10 @@
 # Usage: ./send-draft.sh
 # Output: Success or error message
 
-osascript <<'EOF'
+TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
+
+osascript <<EOF
+with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
     try
         set outgoingCount to count of outgoing messages
@@ -15,8 +18,12 @@ tell application "Mail"
         send theDraft
 
         return "Draft sent successfully"
-    on error errMsg
+    on error errMsg number errNum
+        if errNum is -1712 then
+            return "ERROR:Apple Mail request timed out after $TIMEOUT_SECONDS seconds"
+        end if
         return "ERROR:" & errMsg
     end try
 end tell
+end timeout
 EOF

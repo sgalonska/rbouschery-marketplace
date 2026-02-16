@@ -7,6 +7,7 @@ MESSAGE_ID="${1:-}"
 ACCOUNT="${2:-}"
 MAILBOX="${3:-INBOX}"
 ARCHIVE_MAILBOX="${4:-}"
+TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
 
 if [ -z "$MESSAGE_ID" ]; then
     echo "ERROR:Message ID is required"
@@ -15,9 +16,17 @@ fi
 
 # Build the account/mailbox part
 if [ -n "$ACCOUNT" ]; then
-    ACCOUNT_PART="mailbox \"$MAILBOX\" of account \"$ACCOUNT\""
+    if [ "$MAILBOX" = "INBOX" ]; then
+        ACCOUNT_PART="inbox of account \"$ACCOUNT\""
+    else
+        ACCOUNT_PART="mailbox \"$MAILBOX\" of account \"$ACCOUNT\""
+    fi
 else
-    ACCOUNT_PART="mailbox \"$MAILBOX\""
+    if [ "$MAILBOX" = "INBOX" ]; then
+        ACCOUNT_PART="inbox"
+    else
+        ACCOUNT_PART="mailbox \"$MAILBOX\""
+    fi
 fi
 
 # Build archive logic based on whether custom archive mailbox is specified
@@ -51,6 +60,7 @@ else
 fi
 
 osascript <<EOF
+with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
     try
         set theMailbox to $ACCOUNT_PART
@@ -60,8 +70,12 @@ tell application "Mail"
 
         move theMessage to archiveMailbox
         return "Message archived successfully"
-    on error errMsg
+    on error errMsg number errNum
+        if errNum is -1712 then
+            return "ERROR:Apple Mail request timed out after $TIMEOUT_SECONDS seconds"
+        end if
         return "ERROR:" & errMsg
     end try
 end tell
+end timeout
 EOF

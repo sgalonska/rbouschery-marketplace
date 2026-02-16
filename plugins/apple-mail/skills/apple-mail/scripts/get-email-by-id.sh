@@ -8,6 +8,7 @@ IDS="${1:-}"
 ACCOUNT="${2:-}"
 MAILBOX="${3:-INBOX}"
 INCLUDE_CONTENT="${4:-true}"
+TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
 
 if [ -z "$IDS" ]; then
     echo "ERROR:Message ID is required"
@@ -22,12 +23,21 @@ else
 fi
 
 if [ -n "$ACCOUNT" ]; then
-    ACCOUNT_PART="mailbox \"$MAILBOX\" of account \"$ACCOUNT\""
+    if [ "$MAILBOX" = "INBOX" ]; then
+        ACCOUNT_PART="inbox of account \"$ACCOUNT\""
+    else
+        ACCOUNT_PART="mailbox \"$MAILBOX\" of account \"$ACCOUNT\""
+    fi
 else
-    ACCOUNT_PART="mailbox \"$MAILBOX\""
+    if [ "$MAILBOX" = "INBOX" ]; then
+        ACCOUNT_PART="inbox"
+    else
+        ACCOUNT_PART="mailbox \"$MAILBOX\""
+    fi
 fi
 
 osascript <<EOF
+with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
     set results to ""
     set targetIds to {$IDS}
@@ -69,9 +79,13 @@ tell application "Mail"
                 end if
             end repeat
         end repeat
-    on error errMsg
+    on error errMsg number errNum
+        if errNum is -1712 then
+            return "ERROR:Apple Mail request timed out after $TIMEOUT_SECONDS seconds"
+        end if
         return "ERROR:" & errMsg
     end try
     return results
 end tell
+end timeout
 EOF

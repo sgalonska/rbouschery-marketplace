@@ -7,6 +7,8 @@ QUERY="${1:-}"
 ACCOUNT="${2:-}"
 MAILBOX="${3:-}"
 LIMIT="${4:-10}"
+TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
+SEARCH_CONTENT="${SEARCH_CONTENT:-false}"
 
 if [ -z "$QUERY" ]; then
     echo "ERROR:Search query is required"
@@ -27,7 +29,14 @@ else
     MAILBOX_PART="inbox"
 fi
 
+if [ "$SEARCH_CONTENT" = "true" ]; then
+    SEARCH_PREDICATE='subject contains searchQuery or sender contains searchQuery or content contains searchQuery'
+else
+    SEARCH_PREDICATE='subject contains searchQuery or sender contains searchQuery'
+fi
+
 osascript <<EOF
+with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
     set results to ""
     set foundCount to 0
@@ -38,7 +47,7 @@ tell application "Mail"
         repeat with mb in searchMailboxes
             if foundCount >= $LIMIT then exit repeat
 
-            set msgList to (messages of mb whose subject contains searchQuery or sender contains searchQuery or content contains searchQuery)
+            set msgList to (messages of mb whose $SEARCH_PREDICATE)
             repeat with msg in msgList
                 if foundCount >= $LIMIT then exit repeat
 
@@ -71,9 +80,13 @@ tell application "Mail"
                 set foundCount to foundCount + 1
             end repeat
         end repeat
-    on error errMsg
+    on error errMsg number errNum
+        if errNum is -1712 then
+            return "ERROR:Apple Mail request timed out after $TIMEOUT_SECONDS seconds"
+        end if
         return "ERROR:" & errMsg
     end try
     return results
 end tell
+end timeout
 EOF

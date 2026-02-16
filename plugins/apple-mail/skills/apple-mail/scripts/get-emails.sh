@@ -8,6 +8,7 @@ MAILBOX="${2:-INBOX}"
 LIMIT="${3:-10}"
 INCLUDE_CONTENT="${4:-false}"
 UNREAD_ONLY="${5:-false}"
+TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
 
 # Build the AppleScript dynamically
 if [ "$INCLUDE_CONTENT" = "true" ]; then
@@ -17,9 +18,17 @@ else
 fi
 
 if [ -n "$ACCOUNT" ]; then
-    ACCOUNT_PART="mailbox \"$MAILBOX\" of account \"$ACCOUNT\""
+    if [ "$MAILBOX" = "INBOX" ]; then
+        ACCOUNT_PART="inbox of account \"$ACCOUNT\""
+    else
+        ACCOUNT_PART="mailbox \"$MAILBOX\" of account \"$ACCOUNT\""
+    fi
 else
-    ACCOUNT_PART="mailbox \"$MAILBOX\""
+    if [ "$MAILBOX" = "INBOX" ]; then
+        ACCOUNT_PART="inbox"
+    else
+        ACCOUNT_PART="mailbox \"$MAILBOX\""
+    fi
 fi
 
 if [ "$UNREAD_ONLY" = "true" ]; then
@@ -29,6 +38,7 @@ else
 fi
 
 osascript <<EOF
+with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
     set results to ""
     try
@@ -67,9 +77,13 @@ tell application "Mail"
 
             set results to results & msgId & "<<>>" & msgSubject & "<<>>" & msgSender & "<<>>" & toList & "<<>>" & ccList & "<<>>" & bccList & "<<>>" & (msgDate as string) & "<<>>" & msgRead & "<<>>" & msgContent & "|||"
         end repeat
-    on error errMsg
+    on error errMsg number errNum
+        if errNum is -1712 then
+            return "ERROR:Apple Mail request timed out after $TIMEOUT_SECONDS seconds"
+        end if
         return "ERROR:" & errMsg
     end try
     return results
 end tell
+end timeout
 EOF

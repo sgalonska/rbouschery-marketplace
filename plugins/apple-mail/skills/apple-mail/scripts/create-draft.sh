@@ -10,6 +10,7 @@ TO="${3:-}"
 CC="${4:-}"
 BCC="${5:-}"
 FROM="${6:-}"
+TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
 
 if [ -z "$SUBJECT" ]; then
     echo "ERROR:Subject is required"
@@ -68,14 +69,23 @@ if [ -n "$FROM" ]; then
 fi
 
 osascript <<EOF
+with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
-    set newMessage to make new outgoing message with properties {subject:"$ESCAPED_SUBJECT", content:"$ESCAPED_BODY", visible:true$FROM_PART}
-    tell newMessage
-        $TO_RECIPIENTS
-        $CC_RECIPIENTS
-        $BCC_RECIPIENTS
-    end tell
-    -- Draft is created by leaving the compose window open
-    return "Draft created successfully"
+    try
+        set newMessage to make new outgoing message with properties {subject:"$ESCAPED_SUBJECT", content:"$ESCAPED_BODY", visible:true$FROM_PART}
+        tell newMessage
+            $TO_RECIPIENTS
+            $CC_RECIPIENTS
+            $BCC_RECIPIENTS
+        end tell
+        -- Draft is created by leaving the compose window open
+        return "Draft created successfully"
+    on error errMsg number errNum
+        if errNum is -1712 then
+            return "ERROR:Apple Mail request timed out after $TIMEOUT_SECONDS seconds"
+        end if
+        return "ERROR:" & errMsg
+    end try
 end tell
+end timeout
 EOF
