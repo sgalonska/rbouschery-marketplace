@@ -11,6 +11,7 @@ CC="${4:-}"
 BCC="${5:-}"
 FROM="${6:-}"
 TIMEOUT_SECONDS="${OSA_TIMEOUT_SECONDS:-20}"
+SIGNATURE="${MAIL_SIGNATURE:-}"
 
 if [ -z "$SUBJECT" ]; then
     echo "ERROR:Subject is required"
@@ -72,12 +73,19 @@ osascript <<EOF
 with timeout of $TIMEOUT_SECONDS seconds
 tell application "Mail"
     try
-        set newMessage to make new outgoing message with properties {subject:"$ESCAPED_SUBJECT", content:"$ESCAPED_BODY", visible:true$FROM_PART}
+        -- Create message without content initially
+        set newMessage to make new outgoing message with properties {subject:"$ESCAPED_SUBJECT", visible:true$FROM_PART}
         tell newMessage
             $TO_RECIPIENTS
             $CC_RECIPIENTS
             $BCC_RECIPIENTS
         end tell
+        -- Set signature if specified via MAIL_SIGNATURE env var
+        if "$SIGNATURE" is not "" then
+            set message signature of newMessage to signature "$SIGNATURE"
+        end if
+        -- Set content before signature
+        set content of newMessage to "$ESCAPED_BODY"
         -- Draft is created by leaving the compose window open
         return "Draft created successfully"
     on error errMsg number errNum
